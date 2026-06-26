@@ -26,3 +26,8 @@ Thumbs.db
 # Local reference material — kept on disk for grilling, NOT part of the app
 # (APM Body of Knowledge — copyrighted; do not commit)
 Prince2BOK/
+
+# Python (embedding-proxy)
+__pycache__/
+*.pyc
+embedding-proxy/.env

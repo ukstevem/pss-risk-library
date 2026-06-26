@@ -1,0 +1,28 @@
+services:
+  embedding-proxy:
+    build: .
+    image: ghcr.io/ukstevem/pss-risk-library-embedding-proxy:${IMAGE_TAG:-latest}
+    container_name: embedding-proxy
+    restart: unless-stopped
+    environment:
+      PORT: 8009
+      # Orin Ollama endpoint (must have `ollama pull nomic-embed-text`)
+      EMBEDDING_ORIN_URL: ${EMBEDDING_ORIN_URL:-http://10.0.0.74:11434}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      EMBEDDING_MODEL_VERSION: ${EMBEDDING_MODEL_VERSION:-nomic-embed-text-v1.5}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
+    # Internal-only: reached as http://embedding-proxy:8009 by other services on
+    # platform_net. No host port published, no nginx route.
+    expose:
+      - "8009"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://127.0.0.1:8009/health').status==200 else sys.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  default:
+    name: platform_net
+    external: true
