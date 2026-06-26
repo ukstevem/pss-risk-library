@@ -12,7 +12,7 @@ Standalone app on the PSS gateway (`/risk-library/`, port 3017), sharing the sel
 
 ## Architecture (summary)
 
-- **Backend:** four tables in the shared Supabase (migration `040` in `platform-portal/supabase/migrations`): `risk`, `issue`, `risk_action`, `library_vector` (pgvector, HNSW cosine). Retrieval via the `match_risk_library` RPC — purely semantic, objective-facet filters only, no category taxonomy.
+- **Backend:** four tables in the shared Supabase (migration `040` in `platform-portal/supabase/migrations`): `rl_risk`, `rl_issue`, `rl_action`, `rl_vector` (pgvector, HNSW cosine). Retrieval via the `rl_match` RPC — purely semantic, objective-facet filters only, no category taxonomy.
 - **Embeddings:** `nomic-embed-text-v1.5` (768-dim) served on the Orin via Ollama; an `embedding-proxy` (CPU, Proxmox) owns the query/document prefixes + L2 normalisation and is called server-side from this app's API routes.
 - **UI:** assessment lookup (project profile → ranked, kind-grouped results), structured capture, and a fast seeding-entry mode for the cold-start brain-dump.
 

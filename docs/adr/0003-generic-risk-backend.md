@@ -7,7 +7,7 @@
 The same capture + semantic-retrieval engine applies beyond project risk — to **health & safety risk assessments** and **point-of-work risk assessments (POWRA)**. They share the Risk → Action → Issue structure and the "surface similar past records during a new assessment" use case. So the PoC builds **project risk only**, but keeps the backend **domain-neutral** so other domains arrive later as **new UIs on the same backend, not new systems**.
 
 Concretely, banked now (cheap, reversible):
-- Core tables are **neutral** — `risk`, `issue`, `risk_action`, `library_vector` — **not** `project_*`.
+- Core tables are **`rl_`-prefixed and domain-neutral** — `rl_risk`, `rl_issue`, `rl_action`, `rl_vector` — **not** `project_*`.
 - A **`domain` column** (default `project`) tags every record, as the future scoping seam.
 - The subject link is **loose** — `projectnumber` is nullable now; a generic subject (task / location / work package) comes later.
 - The embedding/retrieval layer is already domain-agnostic and is the shared asset.

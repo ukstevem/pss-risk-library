@@ -14,7 +14,7 @@ Three entities + one embedding layer. Names are **domain-neutral** and every rec
 
 All tables: `id uuid pk default gen_random_uuid()`, `created_at/updated_at timestamptz default now()`, `set_updated_at` trigger, RLS = the platform's 4-policy `authenticated` pattern (open for the PoC, ADR-free because it matches existing convention).
 
-### `risk` — the potential (forward-looking, uncertain)
+### `rl_risk` — the potential (forward-looking, uncertain)
 
 | column | type | notes |
 |---|---|---|
@@ -37,11 +37,11 @@ All tables: `id uuid pk default gen_random_uuid()`, `created_at/updated_at times
 
 The embedded text for a risk = `cause` + `event` + `effect` (+ `title`).
 
-### `issue` — a realized Risk (0..many per Risk)
+### `rl_issue` — a realized Risk (0..many per Risk)
 
 | column | type | notes |
 |---|---|---|
-| `risk_id` | `uuid not null` → `risk(id)` on delete cascade | every Issue has a parent Risk |
+| `risk_id` | `uuid not null` → `rl_risk(id)` on delete cascade | every Issue has a parent Risk |
 | `description` | `text not null` | what actually happened |
 | `result` | `text` | impact / how it played out / outcome |
 | `escalated` | `boolean not null default false` | `false` ≈ APM *Problem* (PM handled it); `true` ≈ APM *Issue* (escalated) |
@@ -52,19 +52,19 @@ The embedded text for a risk = `cause` + `event` + `effect` (+ `title`).
 
 The embedded text for an issue = `description` (+ `result`).
 
-### `risk_action` — the response log (risk- or issue-phase)
+### `rl_action` — the response log (risk- or issue-phase)
 
 | column | type | notes |
 |---|---|---|
-| `risk_id` | `uuid not null` → `risk(id)` on delete cascade | always belongs to a Risk |
-| `issue_id` | `uuid` **null** → `issue(id)` on delete set null | set when `phase = issue_mitigation` (names which Issue) |
+| `risk_id` | `uuid not null` → `rl_risk(id)` on delete cascade | always belongs to a Risk |
+| `issue_id` | `uuid` **null** → `rl_issue(id)` on delete set null | set when `phase = issue_mitigation` (names which Issue) |
 | `phase` | `text not null` | `risk_mitigation` / `issue_mitigation` |
 | `response_type` | `text` | `avoid/reduce/transfer/accept/contingency` (`reduce` = "mitigate") |
 | `action_text` | `text not null` | what we did |
 | `actionee` | `text` | who carried it out |
 | `action_date` | `date` | |
 
-### `library_vector` — the embedding layer (domain-agnostic; the reusable asset)
+### `rl_vector` — the embedding layer (domain-agnostic; the reusable asset)
 
 | column | type | notes |
 |---|---|---|
@@ -89,7 +89,7 @@ The embedded text for an issue = `description` (+ `result`).
 A `security invoker` RPC (RLS applies, browser anon client can call it):
 
 ```
-match_risk_library(
+rl_match(
   query_embedding   vector(768),
   match_count       int     default 10,
   p_domain          text    default 'project',
@@ -100,7 +100,7 @@ match_risk_library(
 ) returns table(kind, source_id, … , similarity)
 ```
 
-`from library_vector` join its `risk`/`issue`; `where embedding is not null and domain = p_domain` + optional objective facet filters + `similarity >= min_similarity`; `order by embedding <=> query_embedding`; `limit match_count`. `similarity = 1 - cosine distance`. Results grouped by `kind` in the UI: **"Risks to consider"** / **"Issues that hit related jobs."**
+`from rl_vector` join its `rl_risk`/`rl_issue`; `where embedding is not null and domain = p_domain` + optional objective facet filters + `similarity >= min_similarity`; `order by embedding <=> query_embedding`; `limit match_count`. `similarity = 1 - cosine distance`. Results grouped by `kind` in the UI: **"Risks to consider"** / **"Issues that hit related jobs."**
 
 (Optional, secondary: a generated `tsvector` + GIN for a keyword narrowing leg — nice-to-have, not the primary signal.)
 
@@ -112,8 +112,8 @@ match_risk_library(
 
 - **Model:** `nomic-embed-text-v1.5`, **768-dim**, 8192-token context, asymmetric prefixes `search_query:` / `search_document:`, L2-normalised, cosine. Served on the **Orin** via **Ollama** (embeddings only).
 - **embedding-proxy (Proxmox, CPU):** stable internal contract `POST /embed { texts[], role: "query"|"document" } → { vectors, model, version, dim }`. It owns the **role prefix + L2 normalisation** (so capture and search can't drift) and decouples the app from the serving backend. **Internal-only** — no nginx route; reachable on `platform_net`.
-- **Capture (on save):** embed the risk text (and issue text where present) as `document`, upsert `library_vector` row(s) with vector + model/version/dim.
-- **Search:** embed the project profile as `query`, call `match_risk_library`, return ranked grouped results. Both hops server-side so the vector never reaches the browser.
+- **Capture (on save):** embed the risk text (and issue text where present) as `document`, upsert `rl_vector` row(s) with vector + model/version/dim.
+- **Search:** embed the project profile as `query`, call `rl_match`, return ranked grouped results. Both hops server-side so the vector never reaches the browser.
 - **Timing:** synchronous on-save for the PoC (low volume). Async worker + re-embed backfill = phase 2.
 
 ## 4. UI / app placement
@@ -147,7 +147,7 @@ Everything runs on `platform_net`. **Storage location is not constrained** (rela
 ## 7. Scope
 
 **PoC (build now):**
-- Migration **040** (applied to self-hosted for dev, and to the cloud project for prod — enable the `vector` extension in the dashboard there first): `vector` extension; `risk`, `issue`, `risk_action`, `library_vector`; HNSW index; RLS; `set_updated_at` triggers; `match_risk_library` RPC. Neutral names + `domain` seam.
+- Migration **040** (applied to self-hosted for dev, and to the cloud project for prod — enable the `vector` extension in the dashboard there first): `vector` extension; `rl_risk`, `rl_issue`, `rl_action`, `rl_vector`; HNSW index; RLS; `set_updated_at` triggers; `rl_match` RPC. `rl_`-prefixed names + `domain` seam.
 - Orin (Ollama `nomic-embed-text`) + Proxmox embedding-proxy.
 - Standalone risk-library app: capture + seeding mode + assessment lookup. Sync-on-save embedding.
 - Raw ranked, kind-grouped results (cause/event/effect · response/actions · outcome · `escalated` · similarity). Cloud Claude summary **optional, off by default** (viable now the on-network constraint is relaxed; still recommend deferring to phase 2 to stay lean).

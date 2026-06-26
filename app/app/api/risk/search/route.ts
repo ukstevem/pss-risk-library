@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { vectors } = await embed([String(profile)], "query");
-    const { data, error } = await supabaseAdmin.rpc("match_risk_library", {
+    const { data, error } = await supabaseAdmin.rpc("rl_match", {
       query_embedding: toVector(vectors[0]),
       match_count: matchCount ?? 15,
       p_domain: "project",

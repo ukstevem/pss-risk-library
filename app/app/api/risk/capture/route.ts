@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
     // 1. insert the risk
     const { data: risk, error: riskErr } = await supabaseAdmin
-      .from("risk")
+      .from("rl_risk")
       .insert({
         domain: "project",
         risk_type: "threat",
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     // 2. embed + store the risk vector
     const riskText = riskEmbedText(r);
     const re = await embed([riskText], "document");
-    await supabaseAdmin.from("library_vector").upsert(
+    await supabaseAdmin.from("rl_vector").upsert(
       {
         kind: "risk",
         source_id: riskId,
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     const iss = body?.issue;
     if (iss && iss.description && String(iss.description).trim()) {
       const { data: issue, error: issErr } = await supabaseAdmin
-        .from("issue")
+        .from("rl_issue")
         .insert({
           risk_id: riskId,
           description: iss.description,
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
 
       const issText = issueEmbedText(iss);
       const ie = await embed([issText], "document");
-      await supabaseAdmin.from("library_vector").upsert(
+      await supabaseAdmin.from("rl_vector").upsert(
         {
           kind: "issue",
           source_id: issueId,
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     const actions = Array.isArray(body?.actions) ? body.actions : [];
     for (const a of actions) {
       if (!a?.action_text || !String(a.action_text).trim()) continue;
-      await supabaseAdmin.from("risk_action").insert({
+      await supabaseAdmin.from("rl_action").insert({
         risk_id: riskId,
         issue_id: a.phase === "issue_mitigation" ? issueId : null,
         phase: a.phase === "issue_mitigation" ? "issue_mitigation" : "risk_mitigation",

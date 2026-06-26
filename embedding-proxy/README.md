@@ -5,7 +5,7 @@ Stable HTTP contract in front of the Orin's Ollama embedding endpoint, for the r
 It owns the three things that must stay consistent between *capture* and *search*:
 - the asymmetric role prefixes — `search_query:` for the project-profile query, `search_document:` for stored risks/issues;
 - L2 normalisation of the returned vectors;
-- the pinned model name / version / dimension (`nomic-embed-text-v1.5`, 768), which it reports back so the app can stamp every `library_vector` row.
+- the pinned model name / version / dimension (`nomic-embed-text-v1.5`, 768), which it reports back so the app can stamp every `rl_vector` row.
 
 Swapping the serving backend later (Ollama → TEI → a sourced GPU) is a change here only — the app never knows.
 
