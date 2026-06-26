@@ -1,0 +1,32 @@
+services:
+  risk-library:
+    image: ghcr.io/ukstevem/pss-risk-library:${IMAGE_TAG:-latest}
+    container_name: risk-library
+    restart: unless-stopped
+    # Required at runtime (Portainer Stack env, or shell export for local compose):
+    #   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_APP_URL
+    #   SUPABASE_URL, SUPABASE_SECRET_KEY
+    #   EMBEDDING_PROXY_URL   (internal on platform_net, e.g. http://embedding-proxy:8009)
+    # NEXT_PUBLIC_* are also baked at build time (from platform-portal/.env via build.sh);
+    # passing them again at runtime is harmless and lets server-side code work too.
+    environment:
+      PORT: 3017
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
+      EMBEDDING_PROXY_URL: ${EMBEDDING_PROXY_URL}
+    ports:
+      - "3017:3017"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3017/risk-library/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  default:
+    name: platform_net
+    external: true

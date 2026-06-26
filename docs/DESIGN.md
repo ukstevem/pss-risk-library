@@ -136,7 +136,7 @@ match_risk_library(
 | risk-library app | **Proxmox** *(stated target)* | ⚠️ apps run on **Pi `10.0.0.75`** today — reconcile |
 | Supabase + **pgvector search (CPU)** | **Proxmox VM `10.0.0.85`** | search is CPU-only ✓ matches plan |
 
-Everything on `platform_net`; **no project text leaves the network** (no cloud summary in the PoC).
+Everything runs on `platform_net`. **Storage location is not constrained** (relaxed 2026-06-26): dev uses the self-hosted Supabase, production uses cloud — the standard per-env pattern — so risk text + embeddings may live on the cloud project. Embeddings are still generated **locally on the Orin** (owned, free, on-LAN); only their numeric vectors + text are stored wherever the env points.
 
 ## 6. Cold start (the corpus *is* the product)
 
@@ -147,10 +147,10 @@ Everything on `platform_net`; **no project text leaves the network** (no cloud s
 ## 7. Scope
 
 **PoC (build now):**
-- Migration **040** (against the shared self-hosted Supabase): `vector` extension; `risk`, `issue`, `risk_action`, `library_vector`; HNSW index; RLS; `set_updated_at` triggers; `match_risk_library` RPC. Neutral names + `domain` seam.
+- Migration **040** (applied to self-hosted for dev, and to the cloud project for prod — enable the `vector` extension in the dashboard there first): `vector` extension; `risk`, `issue`, `risk_action`, `library_vector`; HNSW index; RLS; `set_updated_at` triggers; `match_risk_library` RPC. Neutral names + `domain` seam.
 - Orin (Ollama `nomic-embed-text`) + Proxmox embedding-proxy.
 - Standalone risk-library app: capture + seeding mode + assessment lookup. Sync-on-save embedding.
-- Raw ranked, kind-grouped results (cause/event/effect · response/actions · outcome · `escalated` · similarity). **Fully on-network.**
+- Raw ranked, kind-grouped results (cause/event/effect · response/actions · outcome · `escalated` · similarity). Cloud Claude summary **optional, off by default** (viable now the on-network constraint is relaxed; still recommend deferring to phase 2 to stay lean).
 - The seeding session.
 
 **Phase 2 (gated on a sourced GPU):**
