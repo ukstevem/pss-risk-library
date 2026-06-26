@@ -22,3 +22,7 @@ Thumbs.db
 .dolt/
 *.db
 .beads-credential-key
+
+# Local reference material — kept on disk for grilling, NOT part of the app
+# (APM Body of Knowledge — copyrighted; do not commit)
+Prince2BOK/
