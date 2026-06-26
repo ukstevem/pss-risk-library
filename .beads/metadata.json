@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "pss_risk_library",
+  "project_id": "015dc9e9-585c-47fa-8188-ae4c397d6ab7"
+}

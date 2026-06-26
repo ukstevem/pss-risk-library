@@ -1,0 +1,24 @@
+# Dependencies & build output
+node_modules/
+.next/
+dist/
+out/
+
+# Env — secrets never get committed
+.env
+.env.local
+.env.*.local
+
+# Logs & OS junk
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
