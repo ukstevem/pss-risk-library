@@ -1,146 +1,210 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "@platform/supabase";
 
 const BP = "/risk-library";
 const RESPONSES = ["", "avoid", "reduce", "transfer", "accept", "contingency"];
 const LEVELS = ["", "low", "medium", "high"];
+const STATUS = ["open", "closed"];
 
-type RiskForm = {
-  title: string;
-  cause: string;
+type Risk = {
+  id: string;
+  cause: string | null;
   event: string;
-  effect: string;
-  probability: string;
-  impact: string;
-  proximity: string;
-  response_category: string;
-  risk_owner: string;
-  projectnumber: string;
-  captured_stage: string;
+  effect: string | null;
+  probability: string | null;
+  impact: string | null;
+  response_category: string | null;
+  residual_probability: string | null;
+  residual_impact: string | null;
+  risk_owner: string | null;
+  status: string;
+  projectnumber: string | null;
   missed_risk: boolean;
 };
 
-const EMPTY: RiskForm = {
-  title: "", cause: "", event: "", effect: "", probability: "", impact: "",
-  proximity: "", response_category: "", risk_owner: "", projectnumber: "",
-  captured_stage: "", missed_risk: false,
-};
+const SCORE: Record<string, number> = { low: 1, medium: 2, high: 3 };
 
-export default function Capture() {
-  const [f, setF] = useState<RiskForm>(EMPTY);
-  const [materialized, setMaterialized] = useState(false);
-  const [iss, setIss] = useState({ description: "", result: "", escalated: false });
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+function level(prob: string | null, impact: string | null): { label: string; cls: string } | null {
+  if (!prob || !impact) return null;
+  const s = (SCORE[prob] ?? 0) * (SCORE[impact] ?? 0);
+  if (s >= 6) return { label: "High", cls: "bg-red-100 text-red-700" };
+  if (s >= 3) return { label: "Med", cls: "bg-amber-100 text-amber-700" };
+  return { label: "Low", cls: "bg-green-100 text-green-700" };
+}
 
-  function up<K extends keyof RiskForm>(k: K, v: RiskForm[K]) {
-    setF((s) => ({ ...s, [k]: v }));
+function Score({ prob, impact }: { prob: string | null; impact: string | null }) {
+  const lv = level(prob, impact);
+  return lv ? <span className={`rounded px-2 py-0.5 text-xs ${lv.cls}`}>{lv.label}</span> : <span className="text-gray-300 text-xs">—</span>;
+}
+
+const EMPTY_NEW = { event: "", cause: "", effect: "", probability: "", impact: "", response_category: "", risk_owner: "" };
+
+export default function Register() {
+  const [rows, setRows] = useState<Risk[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [neu, setNeu] = useState(EMPTY_NEW);
+  const [adding, setAdding] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    setLoadErr(null);
+    const { data, error } = await supabase
+      .from("rl_risk")
+      .select("id,cause,event,effect,probability,impact,response_category,residual_probability,residual_impact,risk_owner,status,projectnumber,missed_risk")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) setLoadErr(error.message);
+    setRows((data as Risk[]) ?? []);
+    setLoading(false);
+  }
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function patch(id: string, p: Partial<Risk>) {
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...p } : r)));
+    await fetch(`${BP}/api/risk/update`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, patch: p }),
+    });
   }
 
-  async function submit() {
-    setBusy(true);
-    setMsg(null);
+  async function add() {
+    if (!neu.event.trim()) return;
+    setAdding(true);
     try {
-      const body: Record<string, unknown> = { risk: f };
-      if (materialized && iss.description.trim()) body.issue = iss;
       const res = await fetch(`${BP}/api/risk/capture`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ risk: { ...neu, captured_stage: "meeting" } }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "save failed");
-      setMsg({ ok: true, text: `Saved — risk ${String(json.riskId).slice(0, 8)}…` });
-      setF((s) => ({ ...s, title: "", cause: "", event: "", effect: "" }));
-      setMaterialized(false);
-      setIss({ description: "", result: "", escalated: false });
+      if (!res.ok) throw new Error((await res.json()).error ?? "add failed");
+      setNeu(EMPTY_NEW);
+      await load();
     } catch (e: unknown) {
-      setMsg({ ok: false, text: e instanceof Error ? e.message : "save failed" });
+      setLoadErr(e instanceof Error ? e.message : "add failed");
     } finally {
-      setBusy(false);
+      setAdding(false);
     }
   }
 
   return (
-    <div className="p-8 max-w-2xl">
-      <h1 className="text-2xl font-semibold mb-1">Capture a risk</h1>
-      <p className="text-gray-600 mb-5 text-sm">
-        Write it as cause → event → effect. Only the <em>event</em> is required.
+    <div className="p-8 max-w-full">
+      <h1 className="text-2xl font-semibold mb-1">Risk register</h1>
+      <p className="text-gray-600 mb-4 text-sm">
+        One row per risk. Edit inline; add on the bottom row. <strong>Score</strong> = likelihood × impact
+        (inherent); <strong>Residual</strong> = the same after the response is applied.
       </p>
 
-      <div className="space-y-3">
-        <Text label="Title (optional)" value={f.title} onChange={(v) => up("title", v)} />
-        <Text label="Cause — &ldquo;due to …&rdquo;" value={f.cause} onChange={(v) => up("cause", v)} />
-        <Text label="Event — &ldquo;there is a risk that …&rdquo; *" value={f.event} onChange={(v) => up("event", v)} />
-        <Text label="Effect — &ldquo;which could lead to …&rdquo;" value={f.effect} onChange={(v) => up("effect", v)} />
-
-        <div className="grid grid-cols-3 gap-3">
-          <Select label="Probability" value={f.probability} onChange={(v) => up("probability", v)} options={LEVELS} />
-          <Select label="Impact" value={f.impact} onChange={(v) => up("impact", v)} options={LEVELS} />
-          <Text label="Proximity" value={f.proximity} onChange={(v) => up("proximity", v)} />
+      {loadErr && (
+        <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          Couldn&apos;t load risks: {loadErr} (expected until the DB is migrated and you&apos;re signed in).
         </div>
+      )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <Select label="Response" value={f.response_category} onChange={(v) => up("response_category", v)} options={RESPONSES} />
-          <Text label="Risk owner" value={f.risk_owner} onChange={(v) => up("risk_owner", v)} />
-        </div>
+      <div className="overflow-x-auto border rounded">
+        <table className="w-full text-sm min-w-[1100px]">
+          <thead>
+            <tr className="bg-gray-50 text-left text-xs text-gray-500 uppercase tracking-wide">
+              <th className="px-3 py-2 font-medium">Risk (cause → event → effect)</th>
+              <th className="px-2 py-2 font-medium">L&apos;hood</th>
+              <th className="px-2 py-2 font-medium">Impact</th>
+              <th className="px-2 py-2 font-medium">Score</th>
+              <th className="px-2 py-2 font-medium">Response</th>
+              <th className="px-2 py-2 font-medium bg-gray-100">Res. L</th>
+              <th className="px-2 py-2 font-medium bg-gray-100">Res. I</th>
+              <th className="px-2 py-2 font-medium bg-gray-100">Residual</th>
+              <th className="px-2 py-2 font-medium">Owner</th>
+              <th className="px-2 py-2 font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {rows.map((r) => (
+              <tr key={r.id} className="align-top hover:bg-gray-50">
+                <td className="px-3 py-2 min-w-[280px]">
+                  <div>{r.event}</div>
+                  {(r.cause || r.effect) && (
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {r.cause && <>due to {r.cause}</>}
+                      {r.cause && r.effect && " · "}
+                      {r.effect && <>→ {r.effect}</>}
+                    </div>
+                  )}
+                  {r.missed_risk && <span className="text-[10px] text-red-600">missed risk</span>}
+                </td>
+                <td className="px-2 py-2"><Cell value={r.probability} options={LEVELS} onChange={(v) => patch(r.id, { probability: v || null })} /></td>
+                <td className="px-2 py-2"><Cell value={r.impact} options={LEVELS} onChange={(v) => patch(r.id, { impact: v || null })} /></td>
+                <td className="px-2 py-2"><Score prob={r.probability} impact={r.impact} /></td>
+                <td className="px-2 py-2"><Cell value={r.response_category} options={RESPONSES} onChange={(v) => patch(r.id, { response_category: v || null })} /></td>
+                <td className="px-2 py-2 bg-gray-50/50"><Cell value={r.residual_probability} options={LEVELS} onChange={(v) => patch(r.id, { residual_probability: v || null })} /></td>
+                <td className="px-2 py-2 bg-gray-50/50"><Cell value={r.residual_impact} options={LEVELS} onChange={(v) => patch(r.id, { residual_impact: v || null })} /></td>
+                <td className="px-2 py-2 bg-gray-50/50"><Score prob={r.residual_probability} impact={r.residual_impact} /></td>
+                <td className="px-2 py-2"><OwnerCell value={r.risk_owner} onSave={(v) => patch(r.id, { risk_owner: v || null })} /></td>
+                <td className="px-2 py-2"><Cell value={r.status} options={STATUS} onChange={(v) => patch(r.id, { status: v })} /></td>
+              </tr>
+            ))}
 
-        <div className="grid grid-cols-2 gap-3">
-          <Text label="Project number (optional)" value={f.projectnumber} onChange={(v) => up("projectnumber", v)} />
-          <Select label="Captured at" value={f.captured_stage} onChange={(v) => up("captured_stage", v)} options={["", "meeting", "closeout"]} />
-        </div>
-
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={f.missed_risk} onChange={(e) => up("missed_risk", e.target.checked)} />
-          Elevate to issue — this was a <strong>missed risk</strong> (never foreseen)
-        </label>
-
-        <label className="flex items-center gap-2 text-sm border-t pt-3">
-          <input type="checkbox" checked={materialized} onChange={(e) => setMaterialized(e.target.checked)} />
-          This risk has already happened (record the issue)
-        </label>
-
-        {materialized && (
-          <div className="space-y-3 border-l-2 border-gray-200 pl-3">
-            <Text label="What actually happened *" value={iss.description} onChange={(v) => setIss((s) => ({ ...s, description: v }))} />
-            <Text label="Result / impact" value={iss.result} onChange={(v) => setIss((s) => ({ ...s, result: v }))} />
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={iss.escalated} onChange={(e) => setIss((s) => ({ ...s, escalated: e.target.checked }))} />
-              Escalated beyond the project manager
-            </label>
-          </div>
-        )}
+            {/* add row — residual is set later, after the response is agreed */}
+            <tr className="bg-blue-50/40 align-top">
+              <td className="px-3 py-2">
+                <input
+                  value={neu.event}
+                  onChange={(e) => setNeu((s) => ({ ...s, event: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+                  placeholder="there is a risk that…"
+                  className="w-full border rounded px-2 py-1"
+                />
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <input value={neu.cause} onChange={(e) => setNeu((s) => ({ ...s, cause: e.target.value }))} placeholder="due to… (optional)" className="border rounded px-2 py-1 text-xs" />
+                  <input value={neu.effect} onChange={(e) => setNeu((s) => ({ ...s, effect: e.target.value }))} placeholder="→ leading to… (optional)" className="border rounded px-2 py-1 text-xs" />
+                </div>
+              </td>
+              <td className="px-2 py-2"><Cell value={neu.probability} options={LEVELS} onChange={(v) => setNeu((s) => ({ ...s, probability: v }))} /></td>
+              <td className="px-2 py-2"><Cell value={neu.impact} options={LEVELS} onChange={(v) => setNeu((s) => ({ ...s, impact: v }))} /></td>
+              <td className="px-2 py-2"><Score prob={neu.probability || null} impact={neu.impact || null} /></td>
+              <td className="px-2 py-2"><Cell value={neu.response_category} options={RESPONSES} onChange={(v) => setNeu((s) => ({ ...s, response_category: v }))} /></td>
+              <td className="px-2 py-2 bg-gray-50/50 text-center text-gray-300 text-xs">—</td>
+              <td className="px-2 py-2 bg-gray-50/50 text-center text-gray-300 text-xs">—</td>
+              <td className="px-2 py-2 bg-gray-50/50 text-center text-gray-300 text-xs">—</td>
+              <td className="px-2 py-2"><input value={neu.risk_owner} onChange={(e) => setNeu((s) => ({ ...s, risk_owner: e.target.value }))} className="w-full border rounded px-2 py-1" /></td>
+              <td className="px-2 py-2">
+                <button onClick={add} disabled={adding || !neu.event.trim()} className="bg-[#061b37] text-white px-3 py-1 rounded text-xs disabled:opacity-50 whitespace-nowrap">
+                  {adding ? "…" : "Add"}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
-      <div className="mt-5 flex items-center gap-3">
-        <button onClick={submit} disabled={busy || !f.event.trim()} className="bg-[#061b37] text-white px-4 py-2 rounded text-sm disabled:opacity-50">
-          {busy ? "Saving…" : "Save risk"}
-        </button>
-        {msg && <span className={`text-sm ${msg.ok ? "text-green-700" : "text-red-600"}`}>{msg.text}</span>}
-      </div>
+      {loading && <p className="text-gray-400 text-sm mt-3">Loading…</p>}
     </div>
   );
 }
 
-function Text({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function Cell({ value, options, onChange }: { value: string | null; options: string[]; onChange: (v: string) => void }) {
   return (
-    <label className="block text-sm">
-      <span className="text-gray-600">{label}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full border rounded px-2 py-1.5" />
-    </label>
+    <select value={value ?? ""} onChange={(e) => onChange(e.target.value)} className="w-full border rounded px-1 py-1 bg-white text-sm">
+      {options.map((o) => (
+        <option key={o} value={o}>{o || "—"}</option>
+      ))}
+    </select>
   );
 }
 
-function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+function OwnerCell({ value, onSave }: { value: string | null; onSave: (v: string) => void }) {
+  const [v, setV] = useState(value ?? "");
+  useEffect(() => { setV(value ?? ""); }, [value]);
   return (
-    <label className="block text-sm">
-      <span className="text-gray-600">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full border rounded px-2 py-1.5 bg-white">
-        {options.map((o) => (
-          <option key={o} value={o}>{o || "—"}</option>
-        ))}
-      </select>
-    </label>
+    <input
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => { if (v !== (value ?? "")) onSave(v); }}
+      className="w-full border rounded px-2 py-1"
+    />
   );
 }
