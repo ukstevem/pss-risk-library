@@ -66,7 +66,7 @@ export default function Register() {
 
   async function patch(id: string, p: Partial<Risk>) {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...p } : r)));
-    await fetch(`${BP}/api/risk/update`, {
+    await fetch(`${BP}/api/risk/update/`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id, patch: p }),
@@ -77,7 +77,7 @@ export default function Register() {
     if (!neu.event.trim()) return;
     setAdding(true);
     try {
-      const res = await fetch(`${BP}/api/risk/capture`, {
+      const res = await fetch(`${BP}/api/risk/capture/`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ risk: { ...neu, captured_stage: "meeting" } }),

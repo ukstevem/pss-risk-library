@@ -29,7 +29,7 @@ export default function Assess() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${BP}/api/risk/search`, {
+      const res = await fetch(`${BP}/api/risk/search/`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ profile, matchCount: 15 }),

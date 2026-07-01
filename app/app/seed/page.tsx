@@ -21,7 +21,7 @@ export default function Seed() {
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch(`${BP}/api/risk/capture`, {
+      const res = await fetch(`${BP}/api/risk/capture/`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
