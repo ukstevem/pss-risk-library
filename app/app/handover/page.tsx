@@ -5,7 +5,7 @@ import { useState } from "react";
 const BP = "/risk-library";
 
 type Row = { risk: string; likelihood: string; impact: string; response: string; precedent: string };
-type Out = { profile: string; brief: string; rows: Row[]; candidateCount: number };
+type Out = { profile: string; facets: string[]; brief: string; rows: Row[]; candidateCount: number };
 
 export default function Handover() {
   const [doc, setDoc] = useState("");
@@ -62,9 +62,17 @@ export default function Handover() {
 
       {out && (
         <div className="mt-6 space-y-5">
-          <div className="text-xs text-gray-500 bg-gray-50 border rounded p-3">
-            <span className="font-medium text-gray-600">Read from the document:</span> {out.profile}
-            <span className="text-gray-400"> · {out.candidateCount} precedent{out.candidateCount === 1 ? "" : "s"} retrieved</span>
+          <div className="text-xs text-gray-500 bg-gray-50 border rounded p-3 space-y-1.5">
+            <div><span className="font-medium text-gray-600">Read from the document:</span> {out.profile}</div>
+            {out.facets?.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="font-medium text-gray-600">Facets searched:</span>
+                {out.facets.map((f) => (
+                  <span key={f} className="bg-white border rounded px-1.5 py-0.5">{f}</span>
+                ))}
+              </div>
+            )}
+            <div className="text-gray-400">{out.candidateCount} precedent{out.candidateCount === 1 ? "" : "s"} retrieved (union across facets)</div>
           </div>
 
           {out.brief && (

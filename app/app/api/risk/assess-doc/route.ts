@@ -70,28 +70,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "document required" }, { status: 400 });
     }
 
-    // 1. Extract a project profile from the handover
-    const profile = (
-      await chat([
-        {
-          role: "system",
-          content:
-            "Extract a concise project profile from a handover document: scope, materials, methods, location, client, and key constraints. 2-4 plain sentences, no preamble, no bullet points.",
-        },
-        { role: "user", content: String(document).slice(0, 12000) },
-      ])
-    ).trim();
+    // 1. Extract a profile AND the distinct risk-relevant facets (don't condense to one query)
+    const EXTRACT_SCHEMA = {
+      type: "object",
+      properties: { profile: { type: "string" }, facets: { type: "array", items: { type: "string" } } },
+      required: ["profile", "facets"],
+    };
+    const extracted = JSON.parse(
+      await chat(
+        [
+          {
+            role: "system",
+            content:
+              "Read a project handover/review. Return (a) 'profile': a 2-3 sentence project summary, and (b) 'facets': 4-10 SHORT phrases capturing the distinct risk-relevant aspects — materials, processes, methods, scope boundaries/exclusions, named concerns or queries, site/logistics, deadlines. Each facet a few words.",
+          },
+          { role: "user", content: String(document).slice(0, 12000) },
+        ],
+        EXTRACT_SCHEMA
+      )
+    ) as { profile: string; facets: string[] };
+    const profile = (extracted.profile ?? "").trim();
+    const facets = (extracted.facets ?? []).map((f) => String(f).trim()).filter(Boolean).slice(0, 10);
+    const queries = facets.length ? facets : [profile];
 
-    // 2. Retrieve precedents
-    const { vectors } = await embed([profile], "query");
-    const { data: cands, error } = await supabaseAdmin.rpc("rl_match", {
-      query_embedding: toVector(vectors[0]),
-      match_count: 12,
-      p_domain: "project",
-      min_similarity: 0.0,
-    });
-    if (error) throw error;
-    const candidates = (cands ?? []) as Cand[];
+    // 2. Retrieve precedents per facet, then union (best similarity per item)
+    const { vectors } = await embed(queries, "query");
+    const best = new Map<string, Cand & { similarity: number }>();
+    for (const vec of vectors) {
+      const { data, error } = await supabaseAdmin.rpc("rl_match", {
+        query_embedding: toVector(vec),
+        match_count: 5,
+        p_domain: "project",
+        min_similarity: 0.0,
+      });
+      if (error) throw error;
+      for (const row of (data ?? []) as (Cand & { source_id: string; similarity: number })[]) {
+        const prev = best.get(row.source_id);
+        if (!prev || row.similarity > prev.similarity) best.set(row.source_id, row);
+      }
+    }
+    const candidates = [...best.values()].sort((a, b) => b.similarity - a.similarity).slice(0, 15) as Cand[];
 
     // 3. Synthesise brief + draft register from the relevant precedents
     const list = candidates.map(candLine).join("\n");
@@ -113,6 +131,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       profile,
+      facets,
       brief: parsed.brief ?? "",
       rows: parsed.rows ?? [],
       candidateCount: candidates.length,
