@@ -27,6 +27,10 @@ Thumbs.db
 # (APM Body of Knowledge — copyrighted; do not commit)
 Prince2BOK/
 
+# Example / real project documents — internal & confidential, local only (never commit)
+docs/*.docx
+docs/*.pdf
+
 # Python (embedding-proxy)
 __pycache__/
 *.pyc

@@ -4,6 +4,7 @@ import Link from "next/link";
 
 const nav = [
   { href: "/", label: "Assess" },
+  { href: "/handover", label: "Handover" },
   { href: "/capture", label: "Register" },
   { href: "/seed", label: "Seed" },
 ];
