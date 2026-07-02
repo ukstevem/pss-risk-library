@@ -33,20 +33,24 @@ export async function POST(req: NextRequest) {
     }
 
     const numbered = candidates.map((c: { text: string }, i: number) => `${i + 1}. ${c.text}`).join("\n");
+
+    // A one-word "paint" and a full project brief need different relevance tests.
+    const isTopic = String(profile).trim().split(/\s+/).length <= 6;
+    const system = isTopic
+      ? "You help a project manager find relevant past risks from a short topic or keyword. A past risk is RELEVANT if it concerns the same subject, material, activity or theme as the query — even when worded differently (e.g. 'paint' relates to a 'coating' risk; 'delivery' relates to 'late steel'). Mark relevant=false only when the risk is about a clearly unrelated area."
+      : "You are a project risk manager judging which PAST risks could plausibly occur on a NEW project, based on its scope, materials and methods. Mark relevant=true only when the risk clearly relates to what the project actually involves.";
+    const intro = isTopic ? `Topic: ${profile}` : `New project: ${profile}`;
+
     const body = {
       model: LLM_MODEL,
       stream: false,
       format: SCHEMA,
       options: { temperature: 0 },
       messages: [
-        {
-          role: "system",
-          content:
-            "You are a project risk manager judging which PAST risks could plausibly occur on a NEW project, based only on its scope, materials and methods. Mark relevant=true only when the risk clearly relates to what the project actually involves.",
-        },
+        { role: "system", content: system },
         {
           role: "user",
-          content: `New project: ${profile}\n\nPast risks (numbered):\n${numbered}\n\nReturn one verdict for EACH of the ${candidates.length} risks: its number n, relevant (true/false), and a one-line reason grounded in THIS project.`,
+          content: `${intro}\n\nPast risks (numbered):\n${numbered}\n\nReturn one verdict for EACH of the ${candidates.length} risks: its number n, relevant (true/false), and a one-line reason.`,
         },
       ],
     };
