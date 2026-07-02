@@ -31,3 +31,4 @@ Prince2BOK/
 __pycache__/
 *.pyc
 embedding-proxy/.env
+.venv/
